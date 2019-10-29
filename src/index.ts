@@ -1,4 +1,5 @@
 import _ from "lodash";
+import { Transform } from "stream";
 // @ts-ignore
 import * as tulind from "tulind";
 
@@ -11,19 +12,21 @@ interface ICandle {
   volume: number;
 }
 
+interface IIndicator {
+  name: string;
+  options: number[];
+}
+
 export function getStart({
   name,
   options
-}: {
-  name: string;
-  options: number[];
-}): number {
+}: IIndicator): number {
   return tulind.indicators[name].start(options);
 }
 
 export function getIndicator(
   candles: ICandle[],
-  indicator: { name: string; options: number[] }
+  indicator: IIndicator
 ): Promise<Array<{ time: string; values: number[] }>> {
   return (tulind.indicators[indicator.name].indicator(
     (tulind.indicators[indicator.name].input_names as string[])
@@ -39,4 +42,22 @@ export function getIndicator(
       })
       .reverse();
   });
+}
+
+export function streamCandleToIndicator(indicator: IIndicator): Transform {
+  const candles = []; // нужно для накопления
+  const start = getStart(indicator); // нужно для обрезания лишних данных
+  const ts = new Transform({
+    transform: async (chunk, encoding, callback) => {
+      const candle = JSON.parse(chunk.toString()); // с объектом работает плохо
+      candles.push(candle);
+      if (candles.length > start) {
+        const outputs = await getIndicator(candles, indicator);
+        candles.shift();
+        ts.push(JSON.stringify(outputs[0]));
+      }
+      callback();
+    }
+  });
+  return ts;
 }
