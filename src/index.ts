@@ -49,7 +49,7 @@ export function streamCandleToIndicator(indicator: IIndicator): Transform {
   const start = getStart(indicator); // нужно для обрезания лишних данных
   const ts = new Transform({
     transform: async (chunk, encoding, callback) => {
-      const candle = JSON.parse(chunk.toString()); // с объектом работает плохо
+      const candle = JSON.parse(chunk); // с объектом работает плохо
       candles.push(candle);
       if (candles.length > start) {
         const outputs = await getIndicator(candles, indicator);
