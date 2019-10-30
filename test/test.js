@@ -28,7 +28,7 @@ describe("getIndicator", () => {
   it("Если выполнить запрос getIndicator, то вернется массив индикаторов", function(done) {
     assert.isFunction(getIndicator);
 
-    const candles = JSON.parse(readFileSync("./test/data/candles0.json"));;
+    const candles = JSON.parse(readFileSync("./test/data/candles0.json"));
 
     const indicator = {
       name: "cci",
@@ -90,10 +90,103 @@ describe("streamCandleToIndicator", () => {
   });
 });
 
-describe.skip("streamCandleToBuffer", () => {
-  it("streamCandleToBuffer", function(done) {
+describe("streamCandleToBuffer", () => {
+  it("буфер с одним индикатором", function(done) {
     assert.isFunction(streamCandleToBuffer);
-    //
-    done();
+
+    const candles = JSON.parse(readFileSync("./test/data/candles2.json"));
+
+    const rs = new Readable({
+      read: async () => {
+        rs.push(candles.length ? JSON.stringify(candles.shift()) : null);
+      }
+    });
+
+    const indicators = [
+      {
+        name: "cci",
+        options: [3]
+      }
+    ];
+
+    let i = 0;
+
+    const ts = streamCandleToBuffer(indicators);
+    rs.pipe(ts);
+    ts.on("data", chunk => {
+      ++i;
+      const output = JSON.parse(chunk);
+      assert.isObject(output);
+      assert.hasAllKeys(output, ["candle", "indicators"]);
+      assert.equal(indicators.length, 1);
+      const indicator = output.indicators[0];
+
+      if (indicator.length) {
+        assert.isArray(indicator);
+        assert.isNotEmpty(indicator);
+        assert.equal(indicator.length, 1);
+        assert.isNumber(indicator[0]);
+      }
+    });
+
+    ts.on("finish", () => {
+      done();
+    });
+  });
+
+  it("буфер с двумя индикаторами разной длины", function(done) {
+    assert.isFunction(streamCandleToBuffer);
+
+    const candles = JSON.parse(readFileSync("./test/data/candles2.json"));
+
+    const rs = new Readable({
+      read: async () => {
+        rs.push(candles.length ? JSON.stringify(candles.shift()) : null);
+      }
+    });
+
+    const indicators = [
+      {
+        name: "cci",
+        options: [2]
+      },
+      {
+        name: "max",
+        options: [4]
+      }
+    ];
+
+    let i = 0;
+
+    const ts = streamCandleToBuffer(indicators);
+    rs.pipe(ts);
+    ts.on("data", chunk => {
+      ++i;
+      const output = JSON.parse(chunk);
+      assert.isObject(output);
+      assert.hasAllKeys(output, ["candle", "indicators"]);
+      assert.equal(indicators.length, 2);
+      let indicator = output.indicators[0];
+
+      if (indicator.length) {
+        assert.isArray(indicator);
+        assert.isNotEmpty(indicator);
+        assert.equal(indicator.length, 1);
+        assert.isNumber(indicator[0]);
+      }
+
+      indicator = output.indicators[1];
+
+      if (indicator.length) {
+        assert.isArray(indicator);
+        assert.isNotEmpty(indicator);
+        assert.equal(indicator.length, 1);
+        assert.isNumber(indicator[0]);
+      }
+    });
+
+    ts.on("finish", () => {
+      done();
+    });
   });
 });

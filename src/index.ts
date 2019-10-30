@@ -17,10 +17,7 @@ interface IIndicator {
   options: number[];
 }
 
-export function getStart({
-  name,
-  options
-}: IIndicator): number {
+export function getStart({ name, options }: IIndicator): number {
   return tulind.indicators[name].start(options);
 }
 
@@ -56,6 +53,35 @@ export function streamCandleToIndicator(indicator: IIndicator): Transform {
         candles.shift();
         ts.push(JSON.stringify(outputs[0]));
       }
+      callback();
+    }
+  });
+  return ts;
+}
+
+interface IBuffer {
+  candle: ICandle;
+  indicators: number[][];
+}
+
+export function streamCandleToBuffer(indicators: IIndicator[]): Transform {
+  const candles = []; // нужно для накопления
+  const start = indicators
+    .map(e => getStart(e))
+    .reduce((previousValue, currentValue) =>
+      Math.max(previousValue, currentValue)
+    ); // нужно для обрезания лишних данных
+  const ts = new Transform({
+    transform: async (chunk, encoding, callback) => {
+      const candle = JSON.parse(chunk); // с объектом работает плохо
+      candles.push(candle);
+      const buffer: IBuffer = {
+        candle,
+        indicators: (await Promise.all(indicators.map(indicator =>
+          getIndicator(candles.slice(-start - 1), indicator)
+        ))).map(e => e.length ? e[0].values : [])
+      };
+      ts.push(JSON.stringify(buffer));
       callback();
     }
   });
