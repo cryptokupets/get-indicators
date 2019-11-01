@@ -7,7 +7,8 @@ const {
   getStart,
   getIndicator,
   streamCandleToIndicator,
-  streamCandleToBuffer
+  streamCandleToBuffer,
+  streamBufferToAdvice
 } = require("../lib/index");
 
 describe("getStart", () => {
@@ -189,4 +190,95 @@ describe("streamCandleToBuffer", () => {
       done();
     });
   });
+});
+
+describe("streamBufferToAdvice", function() {
+  it("streamBufferToAdvice", function(done) {
+    assert.isFunction(streamBufferToAdvice);
+    const buffer = [
+      {
+        candle: {
+          time: "2019-09-01T00:00:00.000Z",
+          open: 9589.22,
+          high: 9631.51,
+          low: 9587.54,
+          close: 9612.04,
+          volume: 138.14399
+        },
+        indicators: [
+          [-1]
+        ]
+      }
+    ];
+
+    const rs = new Readable({
+      read: async () => {
+        rs.push(buffer.length ? JSON.stringify(buffer.shift()) : null);
+      }
+    });
+
+    const options = {
+      warmup: 1,
+      code: "return Math.sign(buffer[0].indicators[0][0]);"
+    };
+
+    let i = 0;
+
+    const ts = streamBufferToAdvice(options);
+    rs.pipe(ts);
+    ts.on("data", chunk => {
+      const advice = JSON.parse(chunk);
+      assert.isObject(advice);
+      assert.property(advice, "sign");
+      assert.isNumber(advice.sign);
+      assert.equal(advice.sign, -1);
+      i++;
+    });
+
+    ts.on("finish", () => {
+      assert.equal(i, 1);
+      done();
+    });
+  });
+
+  it("warmup 2", function(done) {
+    assert.isFunction(streamBufferToAdvice);
+    const buffer = [
+      {
+        indicators: [
+          [-1]
+        ]
+      },
+      {
+        indicators: [
+          [1]
+        ]
+      }
+    ];
+
+    const rs = new Readable({
+      read: async () => {
+        rs.push(buffer.length ? JSON.stringify(buffer.shift()) : null);
+      }
+    });
+
+    const options = {
+      code: "return Math.sign(buffer[0].indicators[0][0] * buffer[1].indicators[0][0]);"
+    };
+
+    let i = 0;
+
+    const ts = streamBufferToAdvice(options);
+    rs.pipe(ts);
+    ts.on("data", chunk => {
+      const advice = JSON.parse(chunk);
+      assert.equal(advice.sign, -1);
+      i++;
+    });
+
+    ts.on("finish", () => {
+      assert.equal(i, 1);
+      done();
+    });
+  });  
 });

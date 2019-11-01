@@ -3,7 +3,7 @@ import { Transform } from "stream";
 // @ts-ignore
 import * as tulind from "tulind";
 
-interface ICandle {
+export interface ICandle {
   time: string;
   open: number;
   high: number;
@@ -12,9 +12,20 @@ interface ICandle {
   volume: number;
 }
 
-interface IIndicator {
+export interface IIndicator {
   name: string;
   options: number[];
+}
+
+export interface IBuffer {
+  candle: ICandle;
+  indicators: number[][];
+}
+
+export interface IAdvice {
+  time?: string;
+  sign: number;
+  price?: number;
 }
 
 export function getStart({ name, options }: IIndicator): number {
@@ -59,11 +70,6 @@ export function streamCandleToIndicator(indicator: IIndicator): Transform {
   return ts;
 }
 
-interface IBuffer {
-  candle: ICandle;
-  indicators: number[][];
-}
-
 export function streamCandleToBuffer(indicators: IIndicator[]): Transform {
   const candles = []; // нужно для накопления
   const start = indicators
@@ -77,11 +83,38 @@ export function streamCandleToBuffer(indicators: IIndicator[]): Transform {
       candles.push(candle);
       const buffer: IBuffer = {
         candle,
-        indicators: (await Promise.all(indicators.map(indicator =>
-          getIndicator(candles.slice(-start - 1), indicator)
-        ))).map(e => e.length ? e[0].values : [])
+        indicators: (await Promise.all(
+          indicators.map(indicator =>
+            getIndicator(candles.slice(-start - 1), indicator)
+          )
+        )).map(e => (e.length ? e[0].values : []))
       };
       ts.push(JSON.stringify(buffer));
+      callback();
+    }
+  });
+  return ts;
+}
+
+export function streamBufferToAdvice({ code }: { code: string }): Transform {
+  const buffer: IBuffer[] = []; // для накопления
+  const ts = new Transform({
+    transform: async (chunk, encoding, callback) => {
+      const bufferItem: IBuffer = JSON.parse(chunk);
+      buffer.unshift(bufferItem);
+      const strategyFunction = new Function("buffer", code);
+      let sign: number;
+      try {
+        sign = strategyFunction(buffer);
+      } catch (err) {
+        sign = 0;
+      }
+      if (sign) {
+        const advice: IAdvice = {
+          sign
+        };
+        ts.push(JSON.stringify(advice));
+      }
       callback();
     }
   });
