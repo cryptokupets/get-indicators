@@ -113,6 +113,9 @@ export function streamBufferToAdvice({ code }: { code: string }): Transform {
         const advice: IAdvice = {
           sign
         };
+        if (bufferItem.candle) {
+          advice.price = bufferItem.candle.close;
+        }
         ts.push(JSON.stringify(advice));
       }
       callback();
@@ -121,7 +124,13 @@ export function streamBufferToAdvice({ code }: { code: string }): Transform {
   return ts;
 }
 
-export function streamCandleToAdvice({ indicators, code }: { indicators: IIndicator[], code: string }): Transform {
+export function streamCandleToAdvice({
+  indicators,
+  code
+}: {
+  indicators: IIndicator[];
+  code: string;
+}): Transform {
   const ts0 = streamCandleToBuffer(indicators);
   const ts1 = streamBufferToAdvice({ code });
   ts0.pipe(ts1);

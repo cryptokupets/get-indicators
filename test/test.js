@@ -205,9 +205,7 @@ describe("streamBufferToAdvice", function() {
           close: 9612.04,
           volume: 138.14399
         },
-        indicators: [
-          [-1]
-        ]
+        indicators: [[-1]]
       }
     ];
 
@@ -232,6 +230,8 @@ describe("streamBufferToAdvice", function() {
       assert.property(advice, "sign");
       assert.isNumber(advice.sign);
       assert.equal(advice.sign, -1);
+      assert.property(advice, "price");
+      assert.isNumber(advice.price);
       i++;
     });
 
@@ -245,14 +245,10 @@ describe("streamBufferToAdvice", function() {
     assert.isFunction(streamBufferToAdvice);
     const buffer = [
       {
-        indicators: [
-          [-1]
-        ]
+        indicators: [[-1]]
       },
       {
-        indicators: [
-          [1]
-        ]
+        indicators: [[1]]
       }
     ];
 
@@ -263,7 +259,8 @@ describe("streamBufferToAdvice", function() {
     });
 
     const options = {
-      code: "return Math.sign(buffer[0].indicators[0][0] * buffer[1].indicators[0][0]);"
+      code:
+        "return Math.sign(buffer[0].indicators[0][0] * buffer[1].indicators[0][0]);"
     };
 
     let i = 0;
@@ -280,5 +277,59 @@ describe("streamBufferToAdvice", function() {
       assert.equal(i, 1);
       done();
     });
-  });  
+  });
+
+  it("пустой buffer", function(done) {
+    assert.isFunction(streamBufferToAdvice);
+    const buffer = [
+      {
+        candle: {
+          time: "2019-10-01T00:00:00.000Z",
+          open: 8294.08,
+          high: 8314.51,
+          low: 8195.17,
+          close: 8201.25,
+          volume: 986.7639
+        },
+        indicators: [[], []]
+      },
+      {
+        candle: {
+          time: "2019-10-01T01:00:00.000Z",
+          open: 8201.53,
+          high: 8294,
+          low: 8176.8,
+          close: 8268.89,
+          volume: 1284.43989
+        },
+        indicators: [[8268.89], [8201.25]]
+      }
+    ];
+    const rs = new Readable({
+      read: async () => {
+        rs.push(buffer.length ? JSON.stringify(buffer.shift()) : null);
+      }
+    });
+
+    const options = {
+      code: "return Math.sign(buffer[0].indicators[0][0]);"
+    };
+
+    let i = 0;
+
+    const ts = streamBufferToAdvice(options);
+    rs.pipe(ts);
+    ts.on("data", chunk => {
+      const advice = JSON.parse(chunk);
+      assert.isObject(advice);
+      assert.property(advice, "sign");
+      assert.isNumber(advice.sign);
+      i++;
+    });
+
+    ts.on("finish", () => {
+      assert.equal(i, 1);
+      done();
+    });
+  });
 });
